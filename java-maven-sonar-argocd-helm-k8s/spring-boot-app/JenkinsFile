@@ -2,38 +2,38 @@ pipeline {
   agent {
     docker {
       image 'uwadon01/maven-uwadon1-docker-agent:v1'
-      args '--user root -v /var/run/docker.sock:/var/run/docker.sock'
+      args '--user root -v /var/run/docker.sock:/var/run/docker.sock --add-host sonarqube:54.245.159.36'
     }
   }
 
   environment {
-    SONAR_URL = "http://54.245.159.36:9000"
+    SONAR_URL = "http://sonarqube:9000"  // Using hostname mapping
     GIT_REPO_NAME = "Jenkins-Zero-To-Hero"
     GIT_USER_NAME = "Uwadon1"
     DOCKER_IMAGE = "uwadon01/ultimate-cicd:${BUILD_NUMBER}"
   }
 
   stages {
+    stage('Pre-Check: Verify SonarQube Access') {
+      steps {
+        sh """
+          echo "Testing connection to SonarQube..."
+          curl -v ${SONAR_URL}/api/system/status || echo "Connection test failed"
+          ping -c 2 sonarqube || echo "Ping test failed"
+        """
+      }
+    }
+
     stage('Checkout') {
       steps {
-        sh 'echo "Checking out source code..."'
-        git branch: 'main', url: "https://github.com/${GIT_USER_NAME}/${GIT_REPO_NAME}.git"
+        git branch: 'main', 
+        url: "https://github.com/${GIT_USER_NAME}/${GIT_REPO_NAME}.git"
       }
     }
 
     stage('Build and Test') {
       steps {
-        sh 'ls -ltr'
         sh "cd java-maven-sonar-argocd-helm-k8s/spring-boot-app && mvn clean package"
-      }
-    }
-
-    stage('Debug: Check SonarQube Connectivity') {
-      steps {
-        sh """
-          echo "Testing connection to SonarQube at ${SONAR_URL}"
-          curl -v ${SONAR_URL}/api/system/status || echo "SonarQube Connection failed"
-        """
       }
     }
 
@@ -41,19 +41,18 @@ pipeline {
       steps {
         withCredentials([string(credentialsId: 'sonarqube', variable: 'SONAR_AUTH_TOKEN')]) {
           sh """
-            echo "Running SonarQube Analysis using: ${SONAR_URL}"
             cd java-maven-sonar-argocd-helm-k8s/spring-boot-app
-
-            # Remove any cached or conflicting config
-            rm -f sonar-project.properties || true
-            rm -f ~/.m2/settings.xml || true
-
+            
+            # Nuclear cleanup of any conflicting configs
+            rm -f sonar-project.properties 2>/dev/null || true
+            rm -f ~/.m2/settings.xml 2>/dev/null || true
+            
+            # Run analysis with forced configuration
             mvn sonar:sonar \\
               -Dsonar.host.url=${SONAR_URL} \\
               -Dsonar.login=${SONAR_AUTH_TOKEN} \\
               -Dsonar.forceAuthentication=true \\
-              -Dsonar.scanner.forceReload=true \\
-              -X
+              -Djava.net.preferIPv4Stack=true
           """
         }
       }
@@ -66,10 +65,8 @@ pipeline {
       steps {
         script {
           sh "cd java-maven-sonar-argocd-helm-k8s/spring-boot-app && docker build -t ${DOCKER_IMAGE} ."
-
-          def dockerImage = docker.image("${DOCKER_IMAGE}")
-          docker.withRegistry('https://index.docker.io/v1/', "docker-cred") {
-            dockerImage.push()
+          docker.withRegistry('https://index.docker.io/v1/', 'docker-cred') {
+            docker.image("${DOCKER_IMAGE}").push()
           }
         }
       }
@@ -78,17 +75,25 @@ pipeline {
     stage('Update Deployment File') {
       steps {
         withCredentials([string(credentialsId: 'github', variable: 'GITHUB_TOKEN')]) {
-          sh """
+          sh '''
             git config user.email "uwadon1@gmail.com"
             git config user.name "Uwadone Joshua"
-
             sed -i "s/replaceImageTag/${BUILD_NUMBER}/g" java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml
             git add java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml
             git commit -m "Update deployment image to version ${BUILD_NUMBER}"
-            git push https://${GITHUB_TOKEN}@github.com/${GIT_USER_NAME}/${GIT_REPO_NAME} HEAD:main
-          """
+            git push https://${GITHUB_TOKEN}@github.com/${GIT_USER_NAME}/${GIT_REPO_NAME}.git HEAD:main
+          '''
         }
       }
+    }
+  }
+
+  post {
+    always {
+      sh """
+        echo "Pipeline completed with status: ${currentBuild.result}"
+        echo "SonarQube analysis available at: ${SONAR_URL}/dashboard?id=com.abhishek:spring-boot-demo"
+      """
     }
   }
 }
