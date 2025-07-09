@@ -28,14 +28,30 @@ pipeline {
       }
     }
 
+    stage('Debug: Check SonarQube Connectivity') {
+      steps {
+        sh """
+          echo "Testing connection to SonarQube at ${SONAR_URL}"
+          curl -v ${SONAR_URL}/api/system/status || echo "Connection failed"
+        """
+      }
+    }
+
     stage('Static Code Analysis') {
       steps {
         withCredentials([string(credentialsId: 'sonarqube', variable: 'SONAR_AUTH_TOKEN')]) {
           sh """
             cd java-maven-sonar-argocd-helm-k8s/spring-boot-app && \
+            # Force-delete any existing SonarQube configs that might override
+            rm -f sonar-project.properties || true
+            rm -f ~/.m2/settings.xml || true
+            
+            # Explicitly enforce SonarQube URL and token
             mvn sonar:sonar \
+              -Dsonar.host.url=${SONAR_URL} \
               -Dsonar.login=${SONAR_AUTH_TOKEN} \
-              -Dsonar.host.url=${SONAR_URL}
+              -Dsonar.forceAuthentication=true \
+              -X  # Enable debug logging to verify URL
           """
         }
       }
