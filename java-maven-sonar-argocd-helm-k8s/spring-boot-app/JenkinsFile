@@ -16,8 +16,8 @@ pipeline {
   stages {
     stage('Checkout') {
       steps {
-        sh 'echo passed'
-        // git branch: 'main', url: 'https://github.com/Uwadon1/Jenkins-Zero-To-Hero.git'
+        sh 'echo "Checking out source code..."'
+        git branch: 'main', url: "https://github.com/${GIT_USER_NAME}/${GIT_REPO_NAME}.git"
       }
     }
 
@@ -32,7 +32,7 @@ pipeline {
       steps {
         sh """
           echo "Testing connection to SonarQube at ${SONAR_URL}"
-          curl -v ${SONAR_URL}/api/system/status || echo "Connection failed"
+          curl -v ${SONAR_URL}/api/system/status || echo "SonarQube Connection failed"
         """
       }
     }
@@ -41,17 +41,19 @@ pipeline {
       steps {
         withCredentials([string(credentialsId: 'sonarqube', variable: 'SONAR_AUTH_TOKEN')]) {
           sh """
-            cd java-maven-sonar-argocd-helm-k8s/spring-boot-app && \
-            # Force-delete any existing SonarQube configs that might override
+            echo "Running SonarQube Analysis using: ${SONAR_URL}"
+            cd java-maven-sonar-argocd-helm-k8s/spring-boot-app
+
+            # Remove any cached or conflicting config
             rm -f sonar-project.properties || true
             rm -f ~/.m2/settings.xml || true
-            
-            # Explicitly enforce SonarQube URL and token
-            mvn sonar:sonar \
-              -Dsonar.host.url=${SONAR_URL} \
-              -Dsonar.login=${SONAR_AUTH_TOKEN} \
-              -Dsonar.forceAuthentication=true \
-              -X  # Enable debug logging to verify URL
+
+            mvn sonar:sonar \\
+              -Dsonar.host.url=${SONAR_URL} \\
+              -Dsonar.login=${SONAR_AUTH_TOKEN} \\
+              -Dsonar.forceAuthentication=true \\
+              -Dsonar.scanner.forceReload=true \\
+              -X
           """
         }
       }
