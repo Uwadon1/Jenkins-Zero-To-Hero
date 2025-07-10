@@ -39,7 +39,7 @@ AWS EC2 Instance
 
 First, you need to fork the source code of this project from my  GitLab repo. You can download it onto your local machine by running the command “git clone https://github.com/Uwadon1/Jenkins-Zero-To-Hero”, and then cd into the directory. All the necessary codebase for this project is in this directory ‘java-maven-sonar-argocd-helm-k8s’.
 
-![Clone repo and move into the directory](./img/clone-move.png)
+![Clone repo and move into the directory](./img/01. cd.png)
 
 a. Launch an Ubuntu EC2 (t2.large)
 
