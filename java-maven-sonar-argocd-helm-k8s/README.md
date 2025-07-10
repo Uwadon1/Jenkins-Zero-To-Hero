@@ -40,6 +40,7 @@ AWS EC2 Instance
 First, you need to fork the source code of this project from my  GitLab repo. You can download it onto your local machine by running the command “git clone https://github.com/Uwadon1/Jenkins-Zero-To-Hero”, and then cd into the directory. All the necessary codebase for this project is in this directory ‘java-maven-sonar-argocd-helm-k8s’.
 
 ![Clone repo and move into the directory](./img/clone-move.png)
+
 a. Launch an Ubuntu EC2 (t2.large)
 
 Navigate to the AWS console and launch an instance. We will launch an Ubuntu instance that will serve as the runner, and give it the name “Jenkins-server” and select the AMI server to be Ubuntu Server 22.04 LTS 
